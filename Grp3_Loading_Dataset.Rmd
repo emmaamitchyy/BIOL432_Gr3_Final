@@ -1,0 +1,20 @@
+---
+title: "Gr3_Final"
+output: html_document
+date: "2025-03-17"
+---
+
+```{r}
+# Load Datasets: 
+Raw_Data <- read.csv("Data/RawData.csv")
+
+summary(Raw_Data)
+str(Raw_Data)
+
+
+#Clean data: 
+
+
+
+```
+
