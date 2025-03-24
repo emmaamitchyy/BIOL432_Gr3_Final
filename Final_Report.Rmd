@@ -1,0 +1,55 @@
+---
+title: 'BIOL 432: Final Project'
+author: 
+- "Emma Mitchell - 20296602"
+- "Grace Wolfe - 20302888"
+- "Autumn Hodgins - 20270064"
+- "Noah Gandl Black - 20301317"
+- "Anouk Dimbeanu - 20265582"
+- "Cameron Debellefeuille - 20324416"
+
+- 
+date: "2025-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# BIOL 432 - Group 3 Final Project 
+
+# Analysis of The Nasal Metabolome: 
+
+Git: https://github.com/emmaamitchyy/BIOL432_Gr3_Final 
+
+# Introduction: 
+
+COVID 19 was a blah blah blah ...
+
+Our goal in this project is to analyze this dataset in order to answer the following questions: 
+
+1. Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthu patients and other illnesses)?
+
+2. How do Metabolites correlate with COVID severity? 
+
+3. Is there a difference in metabolite profiles betwen people of the opposite sex? 
+
+
+#Methods 
+
+#Results: 
+
+#Q1:
+
+#Q2: 
+
+#Q3:
+
+
+
+
+
+
+
+
