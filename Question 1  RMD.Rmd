@@ -1,6 +1,6 @@
 ---
 title: "Question 2 Feature selection"
-author: "Anouk Dimbeanu"
+author: "Noah"
 date: "2025-03-24"
 output: html_document
 ---
