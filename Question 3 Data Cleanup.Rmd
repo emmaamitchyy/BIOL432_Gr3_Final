@@ -22,3 +22,19 @@ dat <- df %>%
 head(dat)
 ```
 
+Creating a new dataframe called features, which only contains rows that do not have an NA value for sex, consists of only the columns with metabolites, and removes any of the columns which have 0 variance. This data frame is then z-scaled.
+```{r}
+features <- dat %>%
+  filter(!is.na(Sex)) %>% 
+  select(4:144) %>% 
+  select_if(~ var(., na.rm = TRUE) != 0)
+features_scaled <- scale(features)
+```
+
+Setting Up to run a PCA analysis
+
+```{r}
+sex_pca_full <- princomp(features_scaled, cor = TRUE)
+summary(sex_pca_full)
+```
+The first principal component axis accounts for 30.6% of the variance, and the second axis accounts for 20.3%, explaining most of the variance of the data with only two axes.
