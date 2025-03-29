@@ -1,6 +1,6 @@
 ---
 title: "Question 1 "
-author: "Noah"
+author: "Noah & Cameron"
 date: "2025-03-24"
 output: html_document
 ---
@@ -9,15 +9,16 @@ output: html_document
 library(dplyr)
 library(tidyr)
 library(caret)
-library(MASS) 
-url <- "https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv"
-df <- read.csv(url)
+library(MASS)
+
+theme_set(theme_classic())
+
+df <-  read.csv("https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv") # made more concise
 
 df$Age <- as.numeric(df$Age)
 df$CT <- as.numeric(df$CT)
 df$Age[is.na(df$Age)] <- mean(df$Age, na.rm = TRUE) 
 head(df)
-
 ```
 
 #Question 1 
@@ -46,7 +47,7 @@ df[, names(df) != "Label"] <- lapply(df[, names(df) != "Label"], function(x) as.
 
 # Step 6: Drop columns with >20% missing values
 threshold <- 0.2 * nrow(df)
-df <- df[, colSums(is.na(df)) < threshold]
+df <- df[, colSums(is.na(df)) < threshold] 
 
 # Step 7: Drop rows with missing Label (if any)
 df <- df[!is.na(df$Label), ]
@@ -59,13 +60,16 @@ for (col in names(df)) {
 }
 
 # Step 9: Separate features and labels
-X <- df[, names(df) != "Label"]
+x <- df[, names(df) != "Label"]
 y <- df$Label
 
 # Step 10: Fit Random Forest model
 set.seed(123)
-rf_model <- randomForest(x = X, y = y, importance = TRUE)
+rf_model <- randomForest(x = x, y = y, ntree = 1000, mtry = sqrt(length(x)), nodesize = 5, importance = TRUE)
+rf_model # error rate: 13.96%
+```
 
+```{r}
 # Step 11: Extract importance (Mean Decrease Accuracy)
 importance_df <- importance(rf_model, type = 1)
 importance_df <- data.frame(Metabolite = rownames(importance_df),
@@ -74,19 +78,84 @@ importance_df <- data.frame(Metabolite = rownames(importance_df),
 # Step 12: Get top 20 important metabolites
 top20 <- importance_df %>%
   arrange(desc(MeanDecreaseAccuracy)) %>%
-  slice(1:20)
+  slice(1:10)
 
 # Step 13: Plot
 ggplot(top20, aes(x = MeanDecreaseAccuracy,
                   y = reorder(Metabolite, MeanDecreaseAccuracy))) +
   geom_col(fill = "steelblue") +
-  labs(title = "Top 20 Metabolites Differentiating COVID vs Non-COVID",
+  labs(title = "Top 10 Metabolites Differentiating COVID vs Non-COVID",
        x = "Mean Decrease Accuracy",
-       y = "Metabolite") +
-  theme_minimal()
-
-
+       y = "Metabolite")
 ```
+
+```{r}
+# Step 14 Boosting (compare with RF)
+library(gbm)
+rfBoost <- gbm(Label ~ ., data = df,
+               distribution = "gaussian",
+               n.trees = 100,
+               interaction.depth=2,
+               shrinkage = 0.3,
+               n.minobsinnode = 20,
+               cv.folds = 12)
+
+importance_rf <- summary(rfBoost)
+
+colnames(importance_df) <- c("var", "rel.inf")
+
+plot1 <- ggplot(importance_df %>% top_n(10, rel.inf), 
+       aes(x = rel.inf, y = reorder(var, rel.inf))) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Top 10 Metabolites Differentiating COVID vs Non-COVID",
+       x = "Relative Influence",
+       y = "Metabolite") +
+  theme_classic()
+```
+
+```{r}
+# Step 15 Confusion Matrix
+set.seed(123)
+CatDat <- data.frame(Obs = as.factor(df$Label),
+                     Pred = round(predict(rfBoost, df, type = "response"),0))
+table(CatDat)
+```
+
+```{r}
+# Step 16 Misclassification rate
+MisClass <- CatDat %>% 
+  filter(as.numeric(Obs) != Pred)
+
+misclassification_rate <- nrow(MisClass) / nrow(CatDat)
+print(misclassification_rate)
+```
+
+```{r}
+
+# Step 17 AUC
+library(pROC)
+
+roc_curve <- roc(CatDat$Obs, CatDat$Pred)
+auc(roc_curve)
+```
+
+```{r}
+# Step 18 Graph LYSOC18.0 Concentrations
+plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
+  geom_boxplot() +
+  labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
+  theme_classic()
+
+# Step 19 Arrange Plots
+library(gridExtra)
+grid.arrange(plot1, plot2, ncol = 1)
+```
+
+
+
+
+
+
 
 
 

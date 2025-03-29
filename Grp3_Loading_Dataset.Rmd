@@ -4,17 +4,34 @@ output: html_document
 date: "2025-03-17"
 ---
 
+## Data setup
+
+#### Load data
+
 ```{r}
-# Load Datasets: 
-Raw_Data <- read.csv("Data/RawData.csv")
-
-summary(Raw_Data)
-str(Raw_Data)
-
-
-#Clean data: 
-
-
-
+df <-  read.csv("https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv")
 ```
+
+#### Inspect data
+
+```{r}
+dim(df)
+```
+
+```{r, results='hide'}
+summary(df)
+```
+
+```{r, results='hide'}
+str(df)
+```
+
+```{r}
+names(df)
+```
+
+```{r}
+head(df)
+```
+
 
