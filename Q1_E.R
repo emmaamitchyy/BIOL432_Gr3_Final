@@ -1,7 +1,7 @@
 library(dplyr)
 library(tidyr)
 library(caret)
-library(MASS) 
+library(MASS)  
 url <- "https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv"
 df <- read.csv(url)
 
