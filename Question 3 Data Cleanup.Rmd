@@ -60,7 +60,7 @@ pca_scores$Sex <- dat2$Sex[!is.na(dat2$Sex)]
 ```
 
 
-Plot the first two principal components
+Plot the first two principal components (Male vs. Female)
 
 ```{r}
 ggplot(pca_scores, aes(x = PC1, y = PC2, colour = Sex)) +
