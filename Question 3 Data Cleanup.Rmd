@@ -1,0 +1,40 @@
+---
+title: "Question 3 Data Cleanup"
+author: "Autumn Hodgins"
+date: "2025-03-26"
+output: html_document
+---
+
+Inputting the data and checking the layout with head.
+```{r}
+library(tidyverse)
+url <- "https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv"
+df <- read.csv(url)
+head(df)
+```
+Changing the dataset so that all columns are numeric with the exception of Sample.Name, Batch.Number, Class.name, Sex and Age. Taking all the numeric columns except for CT and replacing NAs with 0, as all non-numeric values in these columns represented 0 (eg. No Peak). For CT, the NA values were not changed, as these represent samples which did not have positive responses to PCR, and so NA makes sense. Converting Sample.Name, Batch.Number, Class.name, and Sex to factors. Age column had multiple values that did not make sense as ages (eg. 0.416666667) so all non-integer values were converted to NA before converting this column to integers. Head is used to look at the newly changed dataset.
+```{r}
+dat <- df %>%
+  mutate(across(c(where(is.character), -c(Sample.Name, Batch.Number, Class.name, Sex, Age)), as.numeric)) %>%
+  mutate(across(4:144, ~ replace_na(., 0))) %>%
+  mutate(across(c(Sample.Name, Batch.Number, Class.name, Sex), as.factor)) %>%
+  mutate(Age = ifelse(grepl("^\\d+$", as.character(Age)), as.integer(Age), NA))
+head(dat)
+```
+
+Creating a new dataframe called features, which only contains rows that do not have an NA value for sex, consists of only the columns with metabolites, and removes any of the columns which have 0 variance. This data frame is then z-scaled.
+```{r}
+features <- dat %>%
+  filter(!is.na(Sex)) %>% 
+  select(4:144) %>% 
+  select_if(~ var(., na.rm = TRUE) != 0)
+features_scaled <- scale(features)
+```
+
+Setting Up to run a PCA analysis
+
+```{r}
+sex_pca_full <- princomp(features_scaled, cor = TRUE)
+summary(sex_pca_full)
+```
+The first principal component axis accounts for 30.6% of the variance, and the second axis accounts for 20.3%, explaining most of the variance of the data with only two axes.
