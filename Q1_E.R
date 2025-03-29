@@ -153,4 +153,4 @@ p2 <- ggplot(top20_gini, aes(x = MeanDecreaseGini, y = reorder(Metabolite, MeanD
   theme_minimal()
 
 # Arrange plots side-by-side
-grid.arrange(p1, p2, ncol = 2)  # **Combine both plots**
+grid.arrange(p1, p2, ncol = 2)  # **Combine both plots** 
