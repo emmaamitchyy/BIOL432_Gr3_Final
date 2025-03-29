@@ -38,3 +38,37 @@ sex_pca_full <- princomp(features_scaled, cor = TRUE)
 summary(sex_pca_full)
 ```
 The first principal component axis accounts for 30.6% of the variance, and the second axis accounts for 20.3%, explaining most of the variance of the data with only two axes.
+
+Naming columns for the figure
+
+```{r}
+colnames(sex_pca_full$scores) <- paste0("PC", 1:ncol(sex_pca_full$scores))
+```
+
+
+Create PCA scores dataframe
+
+```{r}
+pca_scores <- as.data.frame(sex_pca_full$scores)
+```
+
+
+Add the `Sex` variable to the PCA scores dataframe
+
+```{r}
+pca_scores$Sex <- dat2$Sex[!is.na(dat2$Sex)]
+```
+
+
+Plot the first two principal components
+
+```{r}
+ggplot(pca_scores, aes(x = PC1, y = PC2, colour = Sex)) +
+  geom_point() +
+  theme_minimal() +
+  scale_colour_manual(values = c("Male" = "lightblue", "Female" = "lavender"))
+```
+
+
+
+
