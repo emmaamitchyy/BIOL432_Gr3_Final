@@ -125,74 +125,38 @@ heatmapdata
 
 ```{r}
 library(pheatmap)
-pheatmap(heatmapdata, cluster_rows = FALSE, cluster_cols = FALSE, scale = "row",
+heatmapdata <- heatmapdata[rev(rownames(heatmapdata)), ]
+pheatmap(heatmapdata, cluster_rows = F, cluster_cols = F, 
          color = colorRampPalette(terrain.colors(8))(100),
-         fontsize = 6,
+         fontsize_row = 4,
+         fontsize_col = 5,
          xlab = "Metabolites",
-         ylab = "CT values")
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
 ```
 Figure 1. Heatmap of all the metabolites and their correlation by cycle threshold of COVID-19
 
-#Find top 10 metabolites and create a heatmap 
+## Find the top 10 scoring metabolites and plot them in a heatmap
 
 ```{r}
-cor_matrix <- cor(heatmapdata, use = "complete.obs")  # Use complete observations only
+topscores <- apply(heatmapdata, 2, max)  
+topmetabolites <- names(sort(topscores))[1:10]  
 
-# Step 2: Flatten the correlation matrix into a vector of correlations
-cor_vector <- as.vector(cor_matrix)
-
-# Step 3: Remove diagonal values (self-correlations) and any NAs or infinities
-cor_vector <- cor_vector[!duplicated(rownames(cor_matrix))]
-cor_vector <- cor_vector[is.finite(cor_vector)]  # Remove NAs or infinities
-
-# Step 4: Get the top 10 highest absolute correlations
-top_10_corr <- sort(abs(cor_vector), decreasing = TRUE)[1:10]
-
-# Step 5: Identify the metabolites involved in the highest correlations
-top_10_metabolites <- names(top_10_corr)
-
-# Step 6: Subset the data to include only the top 10 metabolites
-top_10_data <- heatmapdata[top_10_metabolites, ]
-
-# Step 7: Remove any NA or infinite values from the subsetted data
-top_10_data <- top_10_data[is.finite(rowSums(top_10_data)), ]
-
-# Step 8: Generate the heatmap
-library(pheatmap)
-pheatmap(top_10_data,
-         cluster_rows = TRUE,   # Cluster rows
-         cluster_cols = TRUE,   # Cluster columns
-         scale = "row",         # Scale the data by rows
-         color = colorRampPalette(terrain.colors(8))(100), # Color gradient
-         fontsize_row = 10,     # Font size for row labels
-         fontsize_col = 6,     # Font size for column labels
-         main = "Heatmap of Top 10 Correlated Metabolites") # Title
-
+top_10_data <- heatmapdata[, topmetabolites]
+top_10_data <- top_10_data[rev(rownames(top_10_data)), ]
+pheatmap(top_10_data, cluster_rows = F, cluster_cols = F, 
+         color = colorRampPalette(terrain.colors(8))(100),
+         fontsize_row = 4,
+         fontsize_col = 9,
+         xlab = "Metabolites",
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
 ```
+Figure 2. Top 10 scoring metabolites and their correlation by cycle threshold for COVID-19
 
-
-Pheatmap code used from Rdocumentation: 
+Pheatmap code taken from rdocumentation:
 https://www.rdocumentation.org/packages/pheatmap/versions/1.0.12/topics/pheatmap
 
-## Heatmap
 
-```{r}
-heatmap(heatmapdata, Rowv = NA, Colv = NA,
-        cexCol = 1, cexRow = 1,
-        col = rev(terrain.colors(8)),
-        xlab = "Metabolites",
-        ylab = "Cyle threshold values")
-
-
-
-```
-
-```{r}
-Legend_image <- as.raster(matrix(colfunc(20), ncol=1))
-plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = 'legend title')
-text(x=1.5, y = seq(0,1,l=5), labels = seq(0,1,l=5))
-rasterImage(legend_image, 0, 0, 1,1)
-```
-Figure 1. Heatmap analysis of metabolite correlation with cycle threshold of COVID-19
-Analysis: 
-LYSOC24, LYSOC18.2, all the PCs and C0 have the strongest correlation wih increased CT in COVID19. 
