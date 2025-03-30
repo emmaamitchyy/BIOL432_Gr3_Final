@@ -23,30 +23,224 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Git: https://github.com/emmaamitchyy/BIOL432_Gr3_Final 
 
-# Introduction: 
+ # Introduction: 
 
-COVID 19 was a blah blah blah ...
-
+The COVID-19 pandemic, caused by the SARS-CoV-2 virus, has had profound global health and economic impacts. While extensive research has been conducted on the virus’s transmission, pathology and immune response, we wanted to look at the metabolic alterations associated with infection. Metabolomics, the study of metabolites within biological systems, provides valuable insights into disease mechanisms, potential biomarkers, and therapeutic targets. By examining the nasopharyngeal metabolome, and therapeutic targets we can assess how metabolic profiles vary among infected individuals and whether specific metabolites correlate with disease severity and patient characteristics such as sex. 
+In this project, we analyze a dataset containing metabolomic data from patients infected with COVID-19, Influenza A (INFA), and respiratory syncytial virus (RSV). The dataset includes information on metabolite concentrations, cycle threshold (CT) values (which serve as a proxy for viral load and disease severity), sex, and age. Our goal is to investigate how metabolic profiles differ among infected and non-infected individuals, as well as how these profiles correlate with disease severity and sex differences.
 Our goal in this project is to analyze this dataset in order to answer the following questions: 
 
-1. Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthu patients and other illnesses)?
+1. Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthy patients and other illnesses)?
+To address this question, we will use decision trees and random forest models to classify samples based on their metabolite profiles. Feature importance analysis will help identify which metabolites contribute most to distinguishing COVID-19 patients from those with other infections or no infection.
 
 2. How do Metabolites correlate with COVID severity? 
 
-3. Is there a difference in metabolite profiles betwen people of the opposite sex? 
+We will generate heatmap to visualize the relationships between metabolite levels and CT values.
+
+3. Is there a difference in metabolite profiles between people of the opposite sex? 
+Principal component analysis (PCA) will be used to explore sex-based differences in metabolic profiles. If significant clustering by sex is observed in the PCA plot, this may suggest inherent metabolic differences between male and female patients in response to viral infections.
+## Methods: 
 
 
-#Methods 
+Loading in Packages: 
+```{r, echo = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+library(dplyr)
+library(tidyr)
+library(caret)
+library(MASS)
+library(randomForest)
+library(ggplot2)
+library(gbm)
+library(pROC)
+library(gridExtra)
+```
 
-#Results: 
+Loading in the data: 
+```{r}
+df <-  read.csv("https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv")
+```
+
 
 #Q1:
+Question: Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthy patients and other illnesses)?
+
+Hypothesis: COVID-19 patients will have distinct metabolite profiles compared to non-COVID-19 patients, with certain metabolites being elevated due to immune response and inflammation.
+
+Coding for Q1: 
+```{r}
+#Data Cleaning for Q1: 
+df$Age <- as.numeric(df$Age)
+df$CT <- as.numeric(df$CT)
+df$Age[is.na(df$Age)] <- mean(df$Age, na.rm = TRUE) 
+head(df)
+```
+
+```{r}
+#Convert special entries to NA
+df[df == "< 0"] <- NA
+df[df == "No Peak"] <- NA
+df <- df %>%
+  dplyr::select(-Trp)
+```
+
+```{r}
+# Create COVID vs Non-COVID label
+df$Label <- ifelse(grepl("COVID19", df$Class.name, ignore.case = TRUE), "COVID", "Non-COVID")
+df$Label <- as.factor(df$Label)
+
+```
+
+```{r}
+#Drop metadata columns
+drop_cols <- c("Sample.Name", "Batch.Number", "Sex", "Age", "CT", "Class.name")
+df <- df[, !(names(df) %in% drop_cols)]
+```
+
+```{r, echo = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+#Convert all feature columns to numeric
+df[, names(df) != "Label"] <- lapply(df[, names(df) != "Label"], function(x) as.numeric(as.character(x)))
+# NAs introduced
+```
+
+Dropping data: 
+```{r}
+#Drop columns with >20% missing values
+threshold <- 0.2 * nrow(df)
+df <- df[, colSums(is.na(df)) < threshold] 
+#Drop rows with missing Label (if any)
+df <- df[!is.na(df$Label), ]
+```
+
+```{r}
+#Impute missing values using column median
+for (col in names(df)) {
+  if (col != "Label" && is.numeric(df[[col]])) {
+    df[[col]][is.na(df[[col]])] <- median(df[[col]], na.rm = TRUE)
+  }
+}
+```
+
+```{r}
+#Split data
+set.seed(123)
+
+# Create an 80/20 train/test split
+train_index <- createDataPartition(df$Label, p = 0.8, list = FALSE)
+
+# Subset the data into training and testing datasets
+train_data <- df[train_index, ]   # 80% of the data
+test_data <- df[-train_index, ]   # 20% of the data
+```
+
+```{r}
+#Training Boosting Model
+set.seed(123)
+
+covidBoost <- gbm(Label ~ ., data = train_data,
+               distribution = "gaussian",
+               n.trees = 1000,
+               interaction.depth=3,
+               shrinkage = 0.05,
+               n.minobsinnode = 5,
+               cv.folds = 15)
+
+```
+
+```{r}
+# Plotting relative influence
+covidBoost_inf <- summary(covidBoost)
+colnames(covidBoost_inf) <- c("var", "rel.inf")
+
+plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf), 
+       aes(x = rel.inf, y = reorder(var, rel.inf))) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Influential Metabolites",
+       x = "Relative Influence",
+       y = "Metabolite") +
+  theme_classic()
+```
+Figure 01: 
+
+```{r}
+# Confusion Matrix
+set.seed(123)
+CatDat <- data.frame(Obs = as.factor(test_data$Label),
+                     Pred = round(predict(covidBoost, test_data, type = "response"),0))
+table(CatDat)
+```
+### The confusion matrix.... 
+```{r}
+#Misclassification rate
+MisClass <- CatDat %>% 
+  filter(as.numeric(Obs) != Pred)
+
+misclassification_rate <- nrow(MisClass) / nrow(CatDat)
+print(misclassification_rate)
+```
+
+###The misclassification rate is.. this means that... 
+
+
+```{r}
+#Auc:
+roc_curve <- roc(as.numeric(CatDat$Obs), as.numeric(CatDat$Pred))
+auc(roc_curve)
+```
+
+#The area under the curve is the.... this means that ...
+```{r}
+#Confusion Matrix
+set.seed(123)
+CatDat1 <- data.frame(Obs = as.factor(train_data$Label),
+                     Pred = round(predict(covidBoost, train_data, type = "response"),0))
+table(CatDat1)
+```
+##The confusion matrix ....
+```{r}
+#AUC
+roc_curve1 <- roc(as.numeric(CatDat1$Obs), as.numeric(CatDat1$Pred))
+auc(roc_curve1)
+```
+#The area under...
+Creating plot: 
+```{r}
+#Graph LYSOC18.0 Concentrations
+plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
+  geom_boxplot() +
+  labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
+  theme_classic()
+#Arrange Plots
+grid.arrange(plot1, plot2, ncol = 2)
+```
+Figure 02: 
+
+###Intrepretation/discussion
+
+
 
 #Q2: 
 
+Question: How do Metabolites correlate with COVID severity?
+
+Hypothesis: Certain metabolites will correlate with COVID-19 severity, with severe cases exhibiting increased levels of metabolites associated with inflammation and immune dysregulation.
+
+
+
 #Q3:
 
+Question: Is there a difference in metabolite profiles betwen people of the opposite sex? 
 
+Hypothesis: Male and female patients will have distinct metabolic profiles, with potential differences in metabolites linked to immune response and inflammation.
+
+To test this hypothesis, we must run a PCA of Metabolite Profiles by Sex. 
+```{r}
+# Load dataset
+dat <- "/Users/emmamitchell/Downloads/RawData.csv"
+df <- read.csv(dat, stringsAsFactors = FALSE)
+```
+
+```{r}
+
+```
 
 
 
