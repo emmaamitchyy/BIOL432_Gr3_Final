@@ -33,6 +33,8 @@ library(dplyr)
 # Step 2: Convert special entries to NA
 df[df == "< 0"] <- NA
 df[df == "No Peak"] <- NA
+df <- df %>%
+  dplyr::select(-Trp)
 
 # Step 3: Create COVID vs Non-COVID label
 df$Label <- ifelse(grepl("COVID19", df$Class.name, ignore.case = TRUE), "COVID", "Non-COVID")
@@ -58,22 +60,34 @@ for (col in names(df)) {
     df[[col]][is.na(df[[col]])] <- median(df[[col]], na.rm = TRUE)
   }
 }
+
+# Step 9: Split data
+set.seed(123)
+
+# Create an 80/20 train/test split
+train_index <- createDataPartition(df$Label, p = 0.8, list = FALSE)
+
+# Subset the data into training and testing datasets
+train_data <- df[train_index, ]   # 80% of the data
+test_data <- df[-train_index, ]   # 20% of the data
 ```
 
 
 ```{r}
-# Step 9: Boosting
+# Step 10: Training Boosting Model
 library(gbm)
-covidBoost <- gbm(Label ~ ., data = df,
+set.seed(123)
+
+covidBoost <- gbm(Label ~ ., data = train_data,
                distribution = "gaussian",
-               n.trees = 100,
-               interaction.depth=2,
-               shrinkage = 0.3,
-               n.minobsinnode = 20,
-               cv.folds = 12)
+               n.trees = 1000,
+               interaction.depth=3,
+               shrinkage = 0.05,
+               n.minobsinnode = 5,
+               cv.folds = 15)
 
+# Step 11: Plotting relative influence
 covidBoost_inf <- summary(covidBoost)
-
 colnames(covidBoost_inf) <- c("var", "rel.inf")
 
 plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf), 
@@ -86,10 +100,10 @@ plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf),
 ```
 
 ```{r}
-# Step 10: Confusion Matrix
+# Step 12: Confusion Matrix
 set.seed(123)
-CatDat <- data.frame(Obs = as.factor(df$Label),
-                     Pred = round(predict(rfBoost, df, type = "response"),0))
+CatDat <- data.frame(Obs = as.factor(test_data$Label),
+                     Pred = round(predict(covidBoost, test_data, type = "response"),0))
 table(CatDat)
 ```
 
@@ -106,8 +120,24 @@ print(misclassification_rate)
 # Step 12: AUC
 library(pROC)
 
-roc_curve <- roc(CatDat$Obs, CatDat$Pred)
+roc_curve <- roc(as.numeric(CatDat$Obs), as.numeric(CatDat$Pred))
 auc(roc_curve)
+```
+
+```{r}
+# Step 10: Confusion Matrix
+set.seed(123)
+CatDat1 <- data.frame(Obs = as.factor(train_data$Label),
+                     Pred = round(predict(covidBoost, train_data, type = "response"),0))
+table(CatDat1)
+```
+
+```{r}
+# Step 12: AUC
+library(pROC)
+
+roc_curve1 <- roc(as.numeric(CatDat1$Obs), as.numeric(CatDat1$Pred))
+auc(roc_curve1)
 ```
 
 ```{r}
