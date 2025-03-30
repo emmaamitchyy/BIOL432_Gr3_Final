@@ -1,0 +1,134 @@
+---
+title: "Q2"
+author: "Anouk Dimbeanu"
+date: "2025-03-30"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(caret)
+library(MASS) 
+url <- "https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv"
+df <- read.csv(url)
+
+```
+
+```{r}
+df$Age <- as.numeric(df$Age)
+df$CT <- as.numeric(df$CT)
+df$Age[is.na(df$Age)] <- mean(df$Age, na.rm = TRUE) 
+head(df)
+
+```
+
+## Change the characters to numeric values
+
+```{r}
+dat <- df %>%
+  mutate(across(c(where(is.character), -c(Sample.Name, Batch.Number, Class.name, Sex, CT, Age)), as.numeric)) %>%
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+```
+
+
+## Rearrange dataset 
+
+```{r}
+dat <- as_tibble(dat) 
+dat <- dat[, c("Sample.Name", "Sex", "Age", "CT", setdiff(names(dat), c("Sample.Name", "Sex", "Age", "CT")))]
+head(dat)
+```
+
+## Feature selection for only COVID-19
+
+
+```{r}
+respDat <- dat %>% 
+  dplyr::select(1:6)
+Features <- dat %>% 
+  dplyr::select(-c(1:6))
+```
+
+## Scaling
+
+```{R}
+Scaled<-Features %>%mutate_all(scale)
+```
+
+
+## Find missing data
+
+```{r}
+Scaled %>%
+  select_if(function(x) any(is.na(x))) %>%
+  names()
+```
+ 
+ We only have to change Trp
+
+```{r}
+ScalComp <- Scaled %>% 
+  mutate(Trp = ifelse(is.na(Trp), 0, Trp))
+```
+
+
+## Dimension reduction
+
+```{r}
+dim(ScalComp)
+```
+
+## PCA
+
+```{r}
+PCA <- princomp(ScalComp)
+summary(PCA)
+```
+
+## Feature selection 
+
+```{r}
+FeatureSel <- ScalComp %>%
+  mutate(Class.name = dat$Class.name) %>%
+  pivot_longer(cols = -Class.name,
+               names_to = "metabolite",
+               values_to = "CONC")
+str(FeatureSel) 
+```
+
+
+```{r}
+heatmapdata <- ScalComp %>%
+  mutate(Class.name = dat$Class.name) %>%
+  filter(Class.name == "COVID19") %>%
+  as.data.frame()
+heatmapdata$CT <- as.numeric(dat$CT[match(rownames(heatmapdata), rownames(dat))])
+heatmapdata$CT[is.na(heatmapdata$CT)] <- 0
+head(heatmapdata)
+```
+
+```{r}
+heatmapdata <- heatmapdata[, !names(heatmapdata) %in% "Class.name"]
+head(heatmapdata)
+```
+
+```{r}
+heatmapdata$CT <- make.unique(as.character(heatmapdata$CT))
+rownames(heatmapdata) <- heatmapdata$CT
+heatmapdata <- heatmapdata[, -which(names(heatmapdata) == "CT")]
+heatmapdata <-heatmapdata[,-1]
+heatmapdata<-as.matrix(heatmapdata)
+heatmapdata
+```
+
+## Heatmap
+
+```{r}
+heatmap(heatmapdata, Rowv = NA, Colv = NA,
+        cexCol = 1, cexRow = 1,
+        col = rev(terrain.colors(8)))
+```
+Figure 1. Heatmap analysis of metabolite correlation with cycle threshold of COVID-19
+Analysis: 
+LYSOC24, LYSOC18.2, all the PCs and C0 have the strongest correlation wih increased CT in COVID19. 
