@@ -100,7 +100,7 @@ plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf),
 ```
 
 ```{r}
-# Step 12: Confusion Matrix
+# Step 12: Confusion Matrix of Test Data
 set.seed(123)
 CatDat <- data.frame(Obs = as.factor(test_data$Label),
                      Pred = round(predict(covidBoost, test_data, type = "response"),0))
@@ -108,7 +108,7 @@ table(CatDat)
 ```
 
 ```{r}
-# Step 11: Misclassification rate
+# Step 13: Misclassification rate
 MisClass <- CatDat %>% 
   filter(as.numeric(Obs) != Pred)
 
@@ -117,7 +117,7 @@ print(misclassification_rate)
 ```
 
 ```{r}
-# Step 12: AUC
+# Step 14: AUC
 library(pROC)
 
 roc_curve <- roc(as.numeric(CatDat$Obs), as.numeric(CatDat$Pred))
@@ -125,7 +125,7 @@ auc(roc_curve)
 ```
 
 ```{r}
-# Step 10: Confusion Matrix
+# Step 15: Confusion Matrix of Train Data
 set.seed(123)
 CatDat1 <- data.frame(Obs = as.factor(train_data$Label),
                      Pred = round(predict(covidBoost, train_data, type = "response"),0))
@@ -133,7 +133,7 @@ table(CatDat1)
 ```
 
 ```{r}
-# Step 12: AUC
+# Step 16: AUC of Train Data
 library(pROC)
 
 roc_curve1 <- roc(as.numeric(CatDat1$Obs), as.numeric(CatDat1$Pred))
@@ -141,22 +141,22 @@ auc(roc_curve1)
 ```
 
 ```{r}
-# Step 13: Graph LYSOC18.0 Concentrations
+# Step 17: Graph LYSOC18.0 Concentrations
 plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
   geom_boxplot() +
   labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
   theme_classic() +
   scale_fill_manual(values = c("COVID" = "steelblue", "Non-COVID" = "lightblue"))
 
-# Step 14: Arrange Plots
+# Step 18: Arrange Plots
 library(gridExtra)
 grid.arrange(plot1, plot2, ncol = 2)
 ```
 
 ```{r}
-# Step 15: Statistical Test - Compare LYSOC18.0 between groups
 t_test_result <- t.test(LYSOC18.0 ~ Label, data = df)
+
+# Print the result
 print(t_test_result)
 ```
-
 

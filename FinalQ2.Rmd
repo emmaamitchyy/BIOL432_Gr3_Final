@@ -122,13 +122,40 @@ heatmapdata<-as.matrix(heatmapdata)
 heatmapdata
 ```
 
-## Heatmap
 
 ```{r}
-heatmap(heatmapdata, Rowv = NA, Colv = NA,
-        cexCol = 1, cexRow = 1,
-        col = rev(terrain.colors(8)))
+library(pheatmap)
+heatmapdata <- heatmapdata[rev(rownames(heatmapdata)), ]
+pheatmap(heatmapdata, cluster_rows = F, cluster_cols = F, 
+         color = colorRampPalette(terrain.colors(8))(100),
+         fontsize_row = 4,
+         fontsize_col = 5,
+         xlab = "Metabolites",
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
 ```
-Figure 1. Heatmap analysis of metabolite correlation with cycle threshold of COVID-19
-Analysis: 
-LYSOC24, LYSOC18.2, all the PCs and C0 have the strongest correlation wih increased CT in COVID19. 
+Figure 1. Heatmap of all the metabolites and their correlation by cycle threshold of COVID-19
+
+## Find the top 10 scoring metabolites and plot them in a heatmap
+
+```{r}
+topscores <- apply(heatmapdata, 2, max)  
+topmetabolites <- names(sort(topscores))[1:10]  
+
+top_10_data <- heatmapdata[, topmetabolites]
+pheatmap(top_10_data, cluster_rows = F, cluster_cols = F, 
+         color = colorRampPalette(terrain.colors(8))(100),
+         fontsize_row = 4,
+         fontsize_col = 9,
+         xlab = "Metabolites",
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
+```
+Figure 2. Top 10 scoring metabolites and their correlation by cycle threshold for COVID-19
+
+Pheatmap code taken from rdocumentation:
+https://www.rdocumentation.org/packages/pheatmap/versions/1.0.12/topics/pheatmap
+
+
