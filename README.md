@@ -20,4 +20,8 @@ Our goal with this code is to look at the COVID-19 metabolome and compare it to 
 
 The answers to these questions and identification of any metabolic patterns can be used to help improve diagnostic accuracy and contribute to the development of target therapies for COVID-19.
 
+To re-run this analysis, be sure to first visit the "Data_Input" folder found in the repository. Here you can find the "data_cleaned.csv" file used throughout our analysis. The python code used to clean the data can be found under "data cleanup test.py".
 
+After the cleaned dataset is loaded in, begin with the "Tuning Boosting parameters.RMD" (for question 1) and follow with the code for each respective code in order (Q1-3). 
+
+For the compiled code (Q1-3) and analysis, see "Final_Report.rmd".
