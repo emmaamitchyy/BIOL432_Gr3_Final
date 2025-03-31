@@ -1,0 +1,154 @@
+---
+title: "Question 1 "
+author: "Noah & Cameron"
+date: "2025-03-24"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(caret)
+library(MASS)
+
+theme_set(theme_classic())
+
+df <-  read.csv("https://raw.githubusercontent.com/emmaamitchyy/BIOL432_Gr3_Final/refs/heads/main/Data_Input/RawData.csv") # made more concise
+
+df$Age <- as.numeric(df$Age)
+df$CT <- as.numeric(df$CT)
+df$Age[is.na(df$Age)] <- mean(df$Age, na.rm = TRUE) 
+head(df)
+```
+
+#Question 1 
+
+```{r}
+# Step 1: Load required libraries 
+library(randomForest)
+library(ggplot2)
+library(dplyr)
+
+
+# Step 2: Convert special entries to NA
+df[df == "< 0"] <- NA
+df[df == "No Peak"] <- NA
+df <- df %>%
+  dplyr::select(-Trp)
+
+# Step 3: Create COVID vs Non-COVID label
+df$Label <- ifelse(grepl("COVID19", df$Class.name, ignore.case = TRUE), "COVID", "Non-COVID")
+df$Label <- as.factor(df$Label)
+
+# Step 4: Drop metadata columns
+drop_cols <- c("Sample.Name", "Batch.Number", "Sex", "Age", "CT", "Class.name")
+df <- df[, !(names(df) %in% drop_cols)]
+
+# Step 5: Convert all feature columns to numeric
+df[, names(df) != "Label"] <- lapply(df[, names(df) != "Label"], function(x) as.numeric(as.character(x)))
+
+# Step 6: Drop columns with >20% missing values
+threshold <- 0.2 * nrow(df)
+df <- df[, colSums(is.na(df)) < threshold] 
+
+# Step 7: Drop rows with missing Label (if any)
+df <- df[!is.na(df$Label), ]
+
+# Step 8: Impute missing values using column median
+for (col in names(df)) {
+  if (col != "Label" && is.numeric(df[[col]])) {
+    df[[col]][is.na(df[[col]])] <- median(df[[col]], na.rm = TRUE)
+  }
+}
+
+# Step 9: Split data
+set.seed(123)
+
+# Create an 80/20 train/test split
+train_index <- createDataPartition(df$Label, p = 0.8, list = FALSE)
+
+# Subset the data into training and testing datasets
+train_data <- df[train_index, ]   # 80% of the data
+test_data <- df[-train_index, ]   # 20% of the data
+```
+
+
+```{r}
+# Step 10: Training Boosting Model
+library(gbm)
+set.seed(123)
+
+covidBoost <- gbm(Label ~ ., data = train_data,
+               distribution = "gaussian",
+               n.trees = 1000,
+               interaction.depth=3,
+               shrinkage = 0.05,
+               n.minobsinnode = 5,
+               cv.folds = 15)
+
+# Step 11: Plotting relative influence
+covidBoost_inf <- summary(covidBoost)
+colnames(covidBoost_inf) <- c("var", "rel.inf")
+
+plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf), 
+       aes(x = rel.inf, y = reorder(var, rel.inf))) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Influential Metabolites",
+       x = "Relative Influence",
+       y = "Metabolite") +
+  theme_classic()
+```
+
+```{r}
+# Step 12: Confusion Matrix of Test Data
+set.seed(123)
+CatDat <- data.frame(Obs = as.factor(test_data$Label),
+                     Pred = round(predict(covidBoost, test_data, type = "response"),0))
+table(CatDat)
+```
+
+```{r}
+# Step 13: Misclassification rate
+MisClass <- CatDat %>% 
+  filter(as.numeric(Obs) != Pred)
+
+misclassification_rate <- nrow(MisClass) / nrow(CatDat)
+print(misclassification_rate)
+```
+
+```{r}
+# Step 14: AUC
+library(pROC)
+
+roc_curve <- roc(as.numeric(CatDat$Obs), as.numeric(CatDat$Pred))
+auc(roc_curve)
+```
+
+```{r}
+# Step 15: Confusion Matrix of Train Data
+set.seed(123)
+CatDat1 <- data.frame(Obs = as.factor(train_data$Label),
+                     Pred = round(predict(covidBoost, train_data, type = "response"),0))
+table(CatDat1)
+```
+
+```{r}
+# Step 16: AUC of Train Data
+library(pROC)
+
+roc_curve1 <- roc(as.numeric(CatDat1$Obs), as.numeric(CatDat1$Pred))
+auc(roc_curve1)
+```
+
+```{r}
+# Step 17: Graph LYSOC18.0 Concentrations
+plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
+  geom_boxplot() +
+  labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
+  theme_classic() +
+  scale_fill_manual(values = c("COVID" = "steelblue", "Non-COVID" = "lightblue"))
+
+# Step 18: Arrange Plots
+library(gridExtra)
+grid.arrange(plot1, plot2, ncol = 2)
+```
