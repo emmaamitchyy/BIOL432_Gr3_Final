@@ -212,7 +212,7 @@ plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf),
        y = "Metabolite") +
   theme_classic()
 ```
-The plot highlights the relative influence of five metabolites—HPHPA, PHE, LYS, C18, and CIT—on distinguishing COVID-19 patients from non-COVID individuals, with CIT showing the highest influence and HPHPA the lowest. But I honestly don’t think its needed
+The plot highlights the relative influence of five metabolites—HPHPA, PHE, LYS, C18, and CIT—on distinguishing COVID-19 patients from non-COVID individuals, with CIT showing the highest influence and HPHPA the lowest. 
 
 ```{r}
 #Confusion Matrix

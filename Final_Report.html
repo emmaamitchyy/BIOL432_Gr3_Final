@@ -553,7 +553,7 @@ plot1 &lt;- ggplot(covidBoost_inf %&gt;% top_n(10, rel.inf),
 <p>The plot highlights the relative influence of five metabolites—HPHPA,
 PHE, LYS, C18, and CIT—on distinguishing COVID-19 patients from
 non-COVID individuals, with CIT showing the highest influence and HPHPA
-the lowest. But I honestly don’t think its needed</p>
+the lowest.</p>
 <pre class="r"><code>#Confusion Matrix
 set.seed(123)
 CatDat1 &lt;- data.frame(Obs = as.factor(train_data$Label),
