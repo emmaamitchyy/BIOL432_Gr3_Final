@@ -152,3 +152,11 @@ plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
 library(gridExtra)
 grid.arrange(plot1, plot2, ncol = 2)
 ```
+
+```{r}
+# Step 15: Statistical Test - Compare LYSOC18.0 between groups
+t_test_result <- t.test(LYSOC18.0 ~ Label, data = df)
+print(t_test_result)
+```
+
+
