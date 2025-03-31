@@ -1,11 +1,12 @@
 # BIOL432_Gr3_Final
 BIOL 432 Group 3 Final Project 
-Emma Mitchell  
-Grace Wolfe 
-Autumn Hodgins
-Noah Gandl Black 
-Anouk Dimbeanu 
-Cameron Debellefeuille 
+Emma Mitchell,  
+Grace Wolfe, 
+Autumn Hodgins,
+Noah Gandl Black, 
+Anouk Dimbeanu, 
+& Cameron Debellefeuille 
+
 Dataset: https://github.com/ColauttiLab/COVID-Metabolomics 
 
 By understanding the metabolic changes associated with COVID-19 infection, we hope to gain valuable insights into the disease’s underlying mechanisms and potential therapeutic targets.
