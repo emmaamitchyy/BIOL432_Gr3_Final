@@ -145,7 +145,8 @@ auc(roc_curve1)
 plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
   geom_boxplot() +
   labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
-  theme_classic()
+  theme_classic() +
+  scale_fill_manual(values = c("COVID" = "steelblue", "Non-COVID" = "lightblue"))
 
 # Step 14: Arrange Plots
 library(gridExtra)
