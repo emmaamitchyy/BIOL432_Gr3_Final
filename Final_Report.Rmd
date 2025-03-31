@@ -7,49 +7,614 @@ author:
 - "Noah Gandl Black - 20301317"
 - "Anouk Dimbeanu - 20265582"
 - "Cameron Debellefeuille - 20324416"
-
 - 
 date: "2025-03-24"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# BIOL 432 - Group 3 Final Project 
+# BIOL 432 - Group 3 Final Project
 
-# Analysis of The Nasal Metabolome: 
+# Analysis of The Nasal Metabolome:
 
-Git: https://github.com/emmaamitchyy/BIOL432_Gr3_Final 
+Git: <https://github.com/emmaamitchyy/BIOL432_Gr3_Final>
 
-# Introduction: 
+Original Data Git:
 
-COVID 19 was a blah blah blah ...
+<https://github.com/ColauttiLab/COVID-Metabolomics>
 
-Our goal in this project is to analyze this dataset in order to answer the following questions: 
+# Introduction:
 
-1. Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthu patients and other illnesses)?
+The COVID-19 pandemic, caused by the SARS-CoV-2 virus, has had profound global health and economic impacts. While extensive research has been conducted on the virus’s transmission, pathology and immune response, we wanted to look at the metabolic alterations associated with infection. Metabolomics, the study of metabolites within biological systems, provides valuable insights into disease mechanisms, potential biomarkers, and therapeutic targets (Clish, 2015). By examining the nasopharyngeal metabolome, and therapeutic targets we can assess how metabolic profiles vary among infected individuals and whether specific metabolites correlate with disease severity and patient characteristics such as sex.
 
-2. How do Metabolites correlate with COVID severity? 
+In this project, we analyze a dataset containing metabolomic data from patients infected with COVID-19, Influenza A (INFA), and respiratory syncytial virus (RSV). The dataset includes information on metabolite concentrations, cycle threshold (CT) values (which serve as a proxy for viral load and disease severity), sex, and age. Our goal is to investigate how metabolic profiles differ among infected and non-infected individuals, as well as how these profiles correlate with disease severity and sex differences. Our goal in this project is to analyze this dataset in order to answer the following questions:
 
-3. Is there a difference in metabolite profiles betwen people of the opposite sex? 
+1.  Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthy patients and other illnesses)?
+
+To address this question, we will use decision trees and random forest models to classify samples based on their metabolite profiles. Feature importance analysis will help identify which metabolites contribute most to distinguishing COVID-19 patients from those with other infections or no infection.
+
+2.  How do Metabolites correlate with COVID severity?
+
+We will generate heat map to visualize the relationships between metabolite levels and CT values.
+
+3.  Is there a difference in metabolite profiles of patients based on sex and age?
+
+Principal component analysis (PCA) will be used to explore sex and age-based differences in metabolic profiles. If significant clustering by sex and/or age is observed in the PCA plot, this may suggest inherent metabolic differences between patients in response to viral infections.
+
+# Methods:
+
+The methods used in Bennet et al. (2021) involve collecting media from clinical NP swabs, followed by metabolite profiling using targeted LC-MS/MS. Multivariate statistical analysis was then applied to identify distinct metabolic signatures associated with COVID-19.
+
+See Analysis pipeline for COVID Metabolomics in Bennet et al for full data collection methods.
+
+Loading in Packages:
+
+```{r, echo = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+library(dplyr)
+library(tidyr)
+library(caret)
+library(MASS)
+library(randomForest)
+library(ggplot2)
+library(gbm)
+library(pROC)
+library(gridExtra)
+library(gplots)
+library(RColorBrewer)
+library(tidyverse)
+library(pheatmap)
+```
+
+Loading in the data:
+
+```{r}
+df <-  read.csv("/Users/emmamitchell/Downloads/data_cleaned.csv")
+```
+
+For all questions, we used this cleaned dataset. The dataset took the raw data and cleaned it using python. The link below takes you to the process of data cleaning:
+
+<https://github.com/emmaamitchyy/BIOL432_Gr3_Final/blob/main/Data_Input/data%20cleanup%20test.py>
+
+# Q1:
+
+Question: Is there a difference in the metabolite profiles between COVID-19 patients and non-COVID-19 patients (healthy patients and other illnesses)?
+
+Hypothesis: Our first hypothesis is that COVID-19 patients will show distinct metabolite profiles compared to non-COVID individuals including both healthy controls and those with other respiratory infections like Influenza or RSV (Schmelter et al., 2021). We expect this difference to arise due to the unique immune and inflammatory responses triggered by SARS-Cov-2. To test this we’re using machine learning models specifically boosting decision tree to identify which metabolites are most predictive of COVID status
+
+*To address Q1, we used gradient boosting to improve classification accuracy.
+Boosting is a powerful ensemble learning method that builds multiple weak learners (decision trees) in sequence, where each new tree corrects the errors of the previous ones. This approach enhances predictive performance, making it particularly useful for complex, high-dimensional datasets like metabolomics (Stamate et al., 2019).
+
+*Parameters for boost were determined on this file in the git hub: <https://github.com/emmaamitchyy/BIOL432_Gr3_Final/blob/main/Tuning%20Boosting%20parameters.Rmd> 
+
+# Coding for Q1:
+
+```{r}
+#Data Cleaning for Q1: 
+df$Age <- as.numeric(df$Age)
+df$CT <- as.numeric(df$CT)
+```
+
+```{r}
+#Convert special entries to NA
+df[df == "< 0"] <- NA
+df[df == "No Peak"] <- NA
+df <- df %>%
+  dplyr::select(-Trp)
+```
+
+```{r}
+# Create COVID vs Non-COVID label
+df$Label <- ifelse(grepl("COVID19", df$Class.name, ignore.case = TRUE), "COVID", "Non-COVID")
+df$Label <- as.factor(df$Label)
+
+```
+
+```{r}
+#Drop metadata columns
+drop_cols <- c("Sample.Name", "Batch.Number", "Sex", "Age", "CT", "Class.name")
+df <- df[, !(names(df) %in% drop_cols)]
+```
+
+```{r, echo = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+#Convert all feature columns to numeric
+df[, names(df) != "Label"] <- lapply(df[, names(df) != "Label"], function(x) as.numeric(as.character(x)))
+# NAs introduced
+```
+
+Dropping data:
+
+```{r}
+#Drop columns with >20% missing values
+threshold <- 0.2 * nrow(df)
+df <- df[, colSums(is.na(df)) < threshold] 
+#Drop rows with missing Label (if any)
+df <- df[!is.na(df$Label), ]
+```
+
+```{r}
+#Impute missing values using column median
+for (col in names(df)) {
+  if (col != "Label" && is.numeric(df[[col]])) {
+    df[[col]][is.na(df[[col]])] <- median(df[[col]], na.rm = TRUE)
+  }
+}
+```
+
+```{r}
+#Split data
+set.seed(123)
+
+# Create an 80/20 train/test split
+train_index <- createDataPartition(df$Label, p = 0.8, list = FALSE)
+
+# Subset the data into training and testing datasets
+train_data <- df[train_index, ]   # 80% of the data
+test_data <- df[-train_index, ]   # 20% of the data
+```
+
+```{r}
+#Training Boosting Model
+set.seed(123)
+
+covidBoost <- gbm(Label ~ ., data = train_data,
+               distribution = "gaussian",
+               n.trees = 1000,
+               interaction.depth=3,
+               shrinkage = 0.05,
+               n.minobsinnode = 5,
+               cv.folds = 15)
+
+```
+
+```{r}
+# Confusion Matrix
+set.seed(123)
+CatDat <- data.frame(Obs = as.factor(test_data$Label),
+                     Pred = round(predict(covidBoost, test_data, type = "response"),0))
+table(CatDat)
+```
+
+```{r}
+#Misclassification rate
+MisClass <- CatDat %>% 
+  filter(as.numeric(Obs) != Pred)
+
+misclassification_rate <- nrow(MisClass) / nrow(CatDat)
+print(misclassification_rate)
+```
+
+This model correctly classified 10 out of 11 COVID-19 cases and 33 out of 33 non-COVID cases. There was only one misclassification, leading to a rate of 2.27%, indicating high predictive accuracy.
+
+```{r}
+#Auc:
+roc_curve <- roc(as.numeric(CatDat$Obs), as.numeric(CatDat$Pred))
+auc(roc_curve)
+```
+
+The area under the curve analysis showed a value of 0.96, thus, the model demonstrated strong discrimination between COVID and non-COVID cases.
+
+```{r}
+#Plotting relative influence
+covidBoost_inf <- summary(covidBoost)
+colnames(covidBoost_inf) <- c("var", "rel.inf")
+
+plot1 <- ggplot(covidBoost_inf %>% top_n(10, rel.inf), 
+       aes(x = rel.inf, y = reorder(var, rel.inf))) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Influential Metabolites",
+       x = "Relative Influence",
+       y = "Metabolite") +
+  theme_classic()
+```
+The plot highlights the relative influence of five metabolites—HPHPA, PHE, LYS, C18, and CIT—on distinguishing COVID-19 patients from non-COVID individuals, with CIT showing the highest influence and HPHPA the lowest. 
+
+```{r}
+#Confusion Matrix
+set.seed(123)
+CatDat1 <- data.frame(Obs = as.factor(train_data$Label),
+                     Pred = round(predict(covidBoost, train_data, type = "response"),0))
+table(CatDat1)
+```
+
+This Matrix showed a 0% misclassification rate, showing perfect predictive accuracy thus, the area under the curve will be 1:
+
+```{r}
+#AUC
+roc_curve1 <- roc(as.numeric(CatDat1$Obs), as.numeric(CatDat1$Pred))
+auc(roc_curve1)
+```
+
+Creating plot:
+```{r}
+#Graph LYSOC18.0 Concentrations
+plot2 <- ggplot(df, aes(x = Label, y = LYSOC18.0, fill = Label)) +
+  geom_boxplot() +
+  labs(y = "LYSOC18.0 Concentration", x = "Diagnosis") +
+  theme_classic()
+#Arrange Plots
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+Figure 01: The plot on the left displays the relative influence of the top 10 metabolites in classifying COVID-19 status using gradient boosting. The x-axis represents the relative influence score, and the y-axis shows the metabolites in order of their importance. LYSOC18.0 has the highest relative influence on classification, indicating it plays a significant role in distinguishing COVID-19 patients from non-COVID individuals. Other metabolites like C16.1OH, Carnosine, and Propionic acid also show substantial influence in the model. The plot on the right is a boxplot comparing the concentrations of LYSOC18.0 between COVID-19 and non-COVID-19 groups. The x-axis represents the diagnosis (COVID vs. non-COVID), while the y-axis shows the LYSOC18.0 concentration. The box for the COVID-19 group is significantly higher, with a median concentration around 3, compared to the non-COVID-19 group, which has a median concentration around 1.5, suggesting a distinct difference in metabolite levels between the two groups.
+
+```{r}
+#Statistical Test - Compare LYSOC18.0 between groups
+t_test_result <- t.test(LYSOC18.0 ~ Label, data = df)
+print(t_test_result)
+```
+
+## Q1 Discussion:
+
+The results from the gradient boosting model (left) and the boxplot (right) provide compelling evidence that metabolite profiles differ significantly between COVID-19 and non-COVID individuals. The metabolites shown to have high relative influence in the boosting model, particularly LYSOC18.0, suggest that specific lipid molecules may play an important role in distinguishing COVID-19 patients from those with other respiratory infections or healthy controls.
+
+The Welch Two-Sample t-test results further support these findings. The t-test compares the means of LYSOC18.0 concentrations between the COVID-19 and non-COVID-19 groups, yielding a highly significant p-value (1.829e-09), confirming that the observed difference is not due to random chance. The difference in mean LYSOC18.0 concentrations—2.77 for COVID-19 patients versus 1.67 for non-COVID-19 patients—indicates a notable increase in LYSOC18.0 levels in COVID-19 patients.
+
+This elevated concentration of LYSOC18.0 could be a potential biomarker for COVID-19, as it appears to correlate with the disease's presence. Given that lysophospholipids are involved in inflammatory pathways, the elevated levels may reflect the immune and inflammatory response triggered by the SARS-CoV-2 virus (Gräler & Goetzl, 2002). Further studies could investigate whether this metabolite could serve as a reliable diagnostic tool or be linked to disease severity in COVID-19 patients.
+
+These findings are consistent with the hypothesis that COVID-19 patients will have distinct metabolite profiles compared to non-COVID individuals. Machine learning models, like gradient boosting, are effective tools for identifying such biomarkers from complex, high-dimensional datasets such as metabolomics.
+
+# Q2:
+
+Question: How do Metabolites correlate with COVID severity?
+
+Hypothesis: The second hypothesis is that specific metabolites will correlate with COVID-19 severity. Since lower CT values indicate higher viral loads and more severe disease (Infectious Diseases Society of America, n.d.), we expect patients with lower CTS to have elevated levels of metabolites associated with inflammation, oxidative stress, or immune dysregulation (Forcados et al., 2021). By visualizing patterns with a heatmap, we’re investigating whether certain metabolite signatures are consistently linked to severe cases.
+
+# Code for Q2:
+
+```{r}
+df <-  read.csv("/Users/emmamitchell/Downloads/data_cleaned.csv")
+```
+
+```{r}
+df$Age <- as.numeric(df$Age)
+df$CT <- as.numeric(df$CT)
+df$Age[is.na(df$Age)] <- mean(df$Age, na.rm = TRUE)
+```
+
+Change the characters to numeric values:
+
+```{r}
+dat <- df %>%
+  mutate(across(c(where(is.character), -c(Sample.Name, Batch.Number, Class.name, Sex, CT, Age)), as.numeric)) %>%
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+```
+
+Rearrange the dataset:
+
+```{r}
+dat <- as_tibble(dat) 
+dat <- dat[, c("Sample.Name", "Sex", "Age", "CT", setdiff(names(dat), c("Sample.Name", "Sex", "Age", "CT")))]
+```
+
+```{r}
+#Feature selection for only COVID-19
+respDat <- dat %>% 
+  dplyr::select(1:6)
+  
+Features <- dat %>% 
+  dplyr::select(-c(1:6))
+```
+
+```{r}
+#Scaling data: 
+Scaled<-Features %>%mutate_all(scale)
+
+#Finding missing data: 
+Scaled %>%
+  select_if(function(x) any(is.na(x))) %>%
+  names()
+```
+
+We have to remove Trp because tryptophan (Trp) contains missing values that could affect downstream analysis. By replacing NA values with 0, we ensure that the PCA and other statistical tests can run smoothly without errors due to missing data.
+
+```{r}
+ScalComp <- Scaled %>% 
+mutate(Trp = ifelse(is.na(Trp), 0, Trp))
+
+## Dimension reduction
+dim(ScalComp)
+```
+
+This means that the dataset has been transformed, and the output of dim(ScalComp) will provide the number of rows (samples) and columns (metabolites). This step is crucial before running PCA, as it ensures that we have the expected number of variables to analyze patterns in metabolite concentrations.
+
+Running a PCA:
+
+```{r}
+PCA <- princomp(ScalComp)
+# Results too long to print but summed up here: 
+```
+
+The Principal Component Analysis (PCA) was performed on the dataset with 141 variables and 222 observations. The standard deviations of the first few principal components (PCs) suggest that the majority of the variance is captured by the first four components, with Comp.1 explaining the most variation (6.48). This indicates that these first components contain the most significant patterns or information in the data.
+
+By reducing the dataset's dimensionality, PCA helps focus on the components that explain the largest portion of the variance, allowing for a more manageable analysis of the dataset's structure.
+
+```{r}
+#Feature selection: 
+FeatureSel <- ScalComp %>%
+  mutate(Class.name = dat$Class.name) %>%
+  pivot_longer(cols = -Class.name,
+               names_to = "metabolite",
+               values_to = "CONC")
+```
+
+After performing PCA, a feature selection step was carried out to focus on the most relevant variables. The dataset was reorganized so that each metabolite is treated as a separate variable, while keeping the class labels (i.e., COVID-19 severity). This restructuring facilitates a clearer analysis of how the metabolites relate to the different severity levels (mild, moderate, severe).
+
+Running the heat map:
+
+```{r}
+# data: 
+heatmapdata <- ScalComp %>%
+  mutate(Class.name = dat$Class.name) %>%
+  filter(Class.name == "COVID19") %>%
+  as.data.frame()
+heatmapdata$CT <- as.numeric(dat$CT[match(rownames(heatmapdata), rownames(dat))])
+heatmapdata$CT[is.na(heatmapdata$CT)] <- 0
+#Change names: 
+heatmapdata <- heatmapdata[, !names(heatmapdata) %in% "Class.name"]
+```
+
+making unique CT names for heatmap data, turning into a matrix:
+
+```{r}
+heatmapdata$CT <- make.unique(as.character(heatmapdata$CT))
+
+rownames(heatmapdata) <- heatmapdata$CT
+
+heatmapdata <- heatmapdata[, -which(names(heatmapdata) == "CT")]
+
+heatmapdata <-heatmapdata[,-1]
+
+heatmapdata<-as.matrix(heatmapdata)
+```
+
+Running the plot:
+
+```{r}
+library(pheatmap)
+heatmapdata <- heatmapdata[rev(rownames(heatmapdata)), ]
+pheatmap(heatmapdata, cluster_rows = F, cluster_cols = F, 
+         color = colorRampPalette(terrain.colors(8))(100),
+         fontsize_row = 4,
+         fontsize_col = 5,
+         xlab = "Metabolites",
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
+```
+
+Figure 02: Heatmap showing the correlation between all metabolites and cycle threshold (CT) values in COVID-19 patients. Each row represents a sample, and each column corresponds to a metabolite. The heatmap visualizes the relationship between metabolite concentrations and CT values, with a color gradient ranging from green (low correlation, 0) to red/white (high correlation, 10). Lower CT values indicate more severe disease and higher viral loads, while higher CT values suggest milder disease.
+
+As this heat map is hard to see, we decided to make another one that shows the top 10 scoring metabolites.
+
+First we had to find the top 10 scoring metabolites:
+
+```{r}
+topscores <- apply(heatmapdata, 2, max)  
+topmetabolites <- names(sort(topscores))[1:10]  
+```
+
+Now plot them:
+
+```{r}
+top_10_data <- heatmapdata[, topmetabolites]
+pheatmap(top_10_data, cluster_rows = F, cluster_cols = F, 
+         color = colorRampPalette(terrain.colors(8))(100),
+         fontsize_row = 4,
+         fontsize_col = 9,
+         xlab = "Metabolites",
+         ylab = "CT values",       
+         main = "COVID-19 metabolites correlation with CT",
+         legend_labels = c("Low", "Medium", "High"))
+```
+Figure 03: Heatmap showing the top 10 scoring metabolites and their correlation with cycle threshold (CT) values for COVID-19 patients. This visualization highlights the metabolites with the highest correlation scores, with a color gradient from green (-1, low correlation) to red/white (1.5, high correlation). The heatmap emphasizes the strongest relationships between these metabolites and disease severity, with color intensity reflecting the degree of correlation.
+
+-   Reference: Pheatmap code taken from rdocumentation: <https://www.rdocumentation.org/packages/pheatmap/versions/1.0.12/topics/pheatmap>
+
+# Q2 Discussion:
+
+The heatmaps in Figures 2 and 3 provide valuable insights into the potential correlation between metabolites and COVID-19 severity, as indicated by cycle threshold (CT) values.
+Our hypothesis questions that metabolites associated with inflammation, oxidative stress, or immune dysregulation would correlate with lower CT values, signifying more severe disease.
+While the heatmap patterns indicate that many metabolites do not show strong associations with CT values, a closer look at the most influential metabolites provides an understanding of the underlying metabolic changes in COVID-19.
+
+Figure 2 shows a predominantly green color palette, suggesting that most metabolites do not exhibit strong correlations with CT values. This implies that a large portion of the metabolic profiles in the cohort may not be directly impacted by COVID-19 severity. However, Figure 3 narrows the focus to the top 10 metabolites, shows more specific patterns and a moderate correlation with CT values.
+
+The metabolites identified as most influential in the correlation with COVID-19 severity, such as Trp (tryptophan), C16.2, LYSOC 14.0, Dopamine, C10.2, C8, C5OH, C9, and X20.2SM, play significant roles in various biological processes. For example, Trp is a precursor for kynurenine, which is involved in immune regulation and inflammation, and is commonly studied in the context of immune responses during infections (Chen et al., 2023). LYSOC 14.0 (lysophosphatidylcholine) is a lipid molecule implicated in inflammation and cell signaling (Ismaeel & Qadri, 2021), while C16.2 and C10.2 are fatty acids that influence inflammatory pathways and oxidative stress(Gupta et al., 2012). Dopamine, known for its role in the nervous system, is also involved in regulating immune responses(Furgiuele et al., 2023), and metabolites like C5OH are tied to oxidative stress, which can exacerbate inflammation in severe disease cases (Liu et al., 2011).
+
+These findings indicate that the metabolites most closely associated with COVID-19 severity are involved in key processes such as inflammation, oxidative stress, and immune regulation. While the overall correlation across the entire dataset may not be overwhelmingly strong, the specific metabolites identified in Figure 3 suggest that these metabolic pathways could contribute to the severity of the disease.
+
+Further research is needed to confirm the exact role of these metabolites in the pathophysiology of COVID-19 and to determine whether they could serve as biomarkers for disease severity. Additionally, larger and more diverse datasets, including factors like age, comorbidities, and immune markers, will be necessary to refine our understanding of the metabolic responses in COVID-19 and their implications for patient care.
+
+# Q3:
+
+Question: Is there a difference in metabolite profiles of patients based on sex and age?
+
+Hypothesis: Our third hypothesis focuses on sex and age-based differences.We propose that patients may show distinct metabolic responses to viral infection, immune regulation, or genetic factors based on their sex and/or age (Vadakedath et al., 2021).
+
+# Q3 Coding:
+
+```{r}
+dat <- read.csv("Data_Input/data_cleaned.csv")
+```
+
+Changing the columns Sample.Name, Batch.Number, Class.name, and Sex to factors.
+
+```{r}
+dat <- dat %>%
+  mutate(across(c(Sample.Name, Batch.Number, Class.name, Sex), as.factor))
+```
+
+Creating a new dataframe called no_NA_dat which only contains rows that do not have an NA value for sex or for Age.
+
+```{r}
+no_NA_dat <- dat %>%
+  filter(!is.na(Sex)) %>% 
+  filter(!is.na(Age))
+```
+
+Creating a new dataframe called features that consists of only the columns with metabolites and removes any of the columns which have 0 variance. This data frame is then z-scaled.
+
+```{r}
+features <- no_NA_dat %>%
+  dplyr::select(4:144) %>% 
+  select_if(~ var(., na.rm = TRUE) != 0)
+
+features_scaled <- as.data.frame(scale(features))
+```
+
+Setting Up to run a PCA analysis
+
+```{r}
+pca_full <- princomp(features_scaled, cor = TRUE)
+```
+
+The first principal component axis accounts for 32.2% of the variance, and the second axis accounts for 19.5%, explaining most of the variance of the data with only two axes.
+
+Naming columns for the figure
+
+```{r}
+colnames(pca_full$scores) <- paste0("PC", 1:ncol(pca_full$scores))
+```
+
+Create PCA scores dataframe
+
+```{r}
+pca_scores <- as.data.frame(pca_full$scores)
+```
+
+Add the "Sex" and "Age" variables to the PCA scores dataframe
+
+```{r}
+pca_scores$Sex <- no_NA_dat$Sex
+pca_scores$Age <- no_NA_dat$Age
+```
+
+Plot PC1 vs PC2, colour coded by Sex:
+
+```{r}
+ggplot(pca_scores, aes(x = PC1, y = PC2, colour = Sex)) +
+  geom_point() +
+  theme_minimal() +
+  scale_colour_manual(values = c("Male" = "blue", "Female" = "salmon"))+
+  ggtitle("Principal Component Analysis (PCA) of Metabolite Profiles by Sex")
+```
+
+Figure 04: This plot displays the Principal Component Analysis (PCA) of the nasopharyngeal metabolome of  all patients, visualized by sex. The scatter plot displays the distribution of male and female patients along the first two principal components (PC1 and PC2). Clustering patterns are assessed to determine if sex-specific differences exist in the overall metabolic profiles.​
 
 
-#Methods 
+Plot PC1 vs PC2, colour coded by Age:
 
-#Results: 
-
-#Q1:
-
-#Q2: 
-
-#Q3:
-
-
-
+```{r}
+ggplot(pca_scores, aes(x = PC1, y = PC2, colour = Age)) +
+  geom_point() +
+  theme_minimal() +
+  scale_colour_gradient(low = "yellow", high = "red")+ 
+ ggtitle("Principal Component Analysis (PCA) of Metabolite Profiles by Age")
+```
+Figure 05:The plot visualizes the Principal Component Analysis (PCA) of the nasopharyngeal metabolome of all patients, visualized by age. The scatter plot displays the distribution of ages along the first two principal components (PC1 and PC2). Clustering patterns are assessed to determine if age-specific differences exist in the overall metabolic profiles.
 
 
+## Q3 Discussion:
 
+As shown in Figure 4, there appears to be no significant difference in the metabolic profiles between sexes, suggesting that sex does not influence the composition of the nasal metabolome across all treatment groups. This finding implies that metabolic responses to the treatments are similar for both males and females, and sex may not be a primary factor in shaping the metabolic landscape of the nasal microbiome.
 
+Figure 5, which examined age as a factor, similarly revealed no differentiation based on age. This suggests that age does not significantly influence the nasal metabolome either. There was no clustering observed in the principal component analysis (PCA) based on either sex or age, indicating that these demographic variables do not contribute to the observed metabolic patterns.
 
+The analysis further supports the conclusion that other, unmeasured factors—such as health status, treatment variations, or lifestyle—could be influencing the metabolic profiles. The lack of clear separation based on sex or age in the PCA plots suggests that these factors do not significantly impact the nasal metabolome in this study.
+
+This analysis does not support our hypothesis that suggested distinct metabolic responses based on sex and age. The absence of clustering by sex or age means that these demographic variables are not confounding factors in the data, and predictive models do not need to account for them when distinguishing between COVID-19 patients and non-patients. Therefore, other factors, beyond sex and age, are likely driving the observed metabolic patterns, and further investigation into these factors is needed to better understand their contributions to the nasal metabolome.
+
+## Conclusion:
+
+This study aimed to examine differences in metabolite profiles between COVID-19 and non-COVID-19 patients, their correlation with disease severity, and sex-based metabolic variations. We found significant differences in the metabolite profiles between COVID-19 patients and non-COVID individuals, particularly with LYSOC18.0. This molecule was found to be notably higher in COVID-19 patients, suggesting its potential as a biomarker for distinguishing COVID-19 from other respiratory infections. This supports the hypothesis that COVID-19 triggers unique immune and inflammatory responses, which are reflected in specific lipid metabolism changes. Future research should further investigate LYSOC18.0 and its potential role in disease severity, along with its diagnostic utility.
+
+For our second hypothesis, although some metabolites such as Trp, LYSOC 14.0, and Dopamine showed moderate associations with COVID-19 severity, the correlation was not consistently strong across the dataset. These metabolites are involved in processes like immune regulation, oxidative stress, and inflammation, which may contribute to disease severity. However, additional studies with larger and more diverse datasets are needed to clarify these relationships and to refine which metabolites could serve as reliable indicators of severity.
+
+Regarding sex-based differences, our third hypothesis was not supported. PCA did not reveal any significant clustering based on sex or age, suggesting that sex and age do not have a major impact on the metabolic profiles in this cohort. While some clustering was observed, it appeared to be driven by other factors.
+
+Future Directions: To enhance the understanding of metabolic responses in COVID-19, further studies should focus on validating the role of LYSOC18.0 and exploring other key metabolites involved in inflammation and immune responses. Additionally, studies examining other demographic factors in larger and more varied populations will help refine the identification of reliable biomarkers for diagnosis and disease severity. Understanding these metabolic pathways will be crucial for advancing personalized therapeutic strategies for COVID-19 and similar viral infections.
+
+## References:
+
+Bennet, S., Kaufmann, M., Takami, K., Sjaarda, C., Douchant, K., Moslinger, E., Wong, H., Reed, D. E., Ellis, A. K.,   Vanner, S., Colautti, R. I., & Sheth, P. M.
+(2022).
+Small-molecule metabolome identifies potential therapeutic targets against covid-19.
+Scientific Reports, 12(1).
+<https://doi.org/10.1038/s41598-022-14050-y>     
+
+Chen, X., Li, G., Zheng, Q., Gu, X., Shi, Q., Su, Y., Chu, Q., Yuan, X., Bao, Z., Lu, J., & Li, L.
+(2023).
+Tryptophan metabolism in health and disease.
+Cell Metabolism, 35(8), 1304–1326.
+<https://doi.org/10.1016/j.cmet.2023.06.004>
+
+Clish C. B.
+(2015).
+Metabolomics: an emerging but powerful tool for precision medicine.
+*Cold Spring Harbor molecular case studies*, *1*(1), a000588.
+<https://doi.org/10.1101/mcs.a000588>
+
+Forcados, G. E., Muhammad, A., Oladipo, O. O., Makama, S., & Meseko, C. A.
+(2021).
+Metabolic Implications of Oxidative Stress and Inflammatory Process in SARS-CoV-2 Pathogenesis: Therapeutic Potential of Natural Antioxidants.
+Frontiers in cellular and infection microbiology, 11, 654813.
+<https://doi.org/10.3389/fcimb.2021.654813>
+
+Furgiuele, A., Pereira, F. C., Martini, S., Marino, F., & Cosentino, M.
+(2023).
+Dopaminergic regulation of inflammation and immunity in Parkinson's disease: friend or foe?.
+Clinical & translational immunology, 12(10), e1469.
+<https://doi.org/10.1002/cti2.1469>
+
+Gräler, M. H., & Goetzl, E. J.
+(2002).
+Lysophospholipids and their G protein-coupled receptors in inflammation and immunity.
+Biochimica et Biophysica Acta (BBA) - Molecular and Cell Biology of Lipids, 1582(1–3), 168–174.
+[https://doi.org/10.1016/S1388-1981(02)00152-X](https://doi.org/10.1016/S1388-1981(02)00152-X){.uri}
+
+Gupta, S., Knight, A. G., Gupta, S., Keller, J. N., & Bruce-Keller, A. J.
+(2012).
+Saturated long-chain fatty acids activate inflammatory signaling in astrocytes.
+Journal of Neurochemistry, 120(6), 1060–1071.
+<https://doi.org/10.1111/j.1471-4159.2012.07660.x>
+
+Infectious Diseases Society of America.
+(n.d.).
+What is a cycle threshold (Ct) value?
+Infectious Diseases Society of America.
+<https://www.idsociety.org/covid-19-real-time-learning-network/diagnostics/what-is-a-cycle-threshold-value/#/+/0/publishedDate_na_dt/desc/>
+
+Ismaeel, S., & Qadri, A.
+(2021).
+ATP release drives inflammation with lysophosphatidylcholine.
+Immunohorizons, 5(4), 219–233.
+<https://doi.org/10.4049/immunohorizons.2100023>
+
+Liu, J., Litt, L., Segal, M. R., Kelly, M. J., Pelton, J. G., & Kim, M.
+(2011).
+Metabolomics of oxidative stress in recent studies of endogenous and exogenously administered intermediate metabolites.
+International journal of molecular sciences, 12(10), 6469–6501.
+<https://doi.org/10.3390/ijms12106469>
+
+Schmelter, F., Föh, B., Mallagaray, A., Rahmöller, J., Ehlers, M., Lehrian, S., von Kopylow, V., Künsting, I., Lixenfeld, A. S., Martin, E., Ragab, M., Meyer-Saraei, R., Kreutzmann, F., Eitel, I., Taube, S., Käding, N., Jantzen, E., Graf, T., Sina, C., & Günther, U. L.
+(2021).
+Metabolic and lipidomic markers differentiate COVID-19 from non-hospitalized and other intensive care patients.
+Frontiers in Molecular Biosciences, 8, 737039.
+<https://doi.org/10.3389/fmolb.2021.737039>
+
+Stamate, D., Kim, M., Proitsi, P., Westwood, S., Baird, A., Nevado-Holgado, A., Hye, A., Bos, I., Vos, S. J. B., Vandenberghe, R., Teunissen, C. E., Kate, M. T., Scheltens, P., Gabel, S., Meersmans, K., Blin, O., Richardson, J., De Roeck, E., Engelborghs, S., Sleegers, K., … Legido-Quigley, C.
+(2019).
+A metabolite-based machine learning approach to diagnose Alzheimer-type dementia in blood: Results from the European Medical Information Framework for Alzheimer disease biomarker discovery cohort.
+Alzheimer's & dementia (New York, N. Y.), 5, 933–938.
+<https://doi.org/10.1016/j.trci.2019.11.001>
+
+Vadakedath, S., Kandi, V., Mohapatra, R. K., Pinnelli, V. B. K., Yegurla, R. R., Shahapur, P. R., Godishala, V., Natesan, S., Vora, K. S., Sharun, K., Tiwari, R., Bilal, M., & Dhama, K.
+(2021).
+Immunological aspects and gender bias during respiratory viral infections including novel Coronavirus disease-19 (COVID-19): A scoping review.
+Journal of medical virology, 93(9), 5295–5309.
+<https://doi.org/10.1002/jmv.27081>
